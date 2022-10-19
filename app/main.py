@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import settings
 from app.db.database import database, create_redis_client
-from app.routers import check_health, check_redis, user, company
+from app.routers import check_health, check_redis, user
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -33,11 +33,7 @@ if settings.CORS_ALLOWED_ORIGINS:
 app.include_router(check_health.router)
 app.include_router(check_redis.router)
 app.include_router(user.router)
-app.include_router(company.router)
 
 
 if __name__ == '__main__':
     uvicorn.run('main:app', port=settings.SERVER_PORT, host=settings.SERVER_HOST, reload=True)
-
-
-

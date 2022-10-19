@@ -1,22 +1,24 @@
 from typing import List
+
 from fastapi import APIRouter
 
-from app.models.user import users
+from app.db.repositories.user import UserRepository
 from app.schemas.user import User, UserCreate
-from app.db.database import database
 
 
 router = APIRouter()
 
 
-@router.get("/users/", response_model=List[User])
-async def get_users():
-    query = users.select()
-    return await database.fetch_all(query)
-
-
-@router.post("/users/", response_model=User)
+@router.post("/users/")
 async def create_user(user: UserCreate):
-    query = users.insert().values(email=user.email, password=user.password)
-    last_record_id = await database.execute(query)
-    return {**user.dict(), "id": last_record_id}
+    # TODO: -> User
+    user_id = await UserRepository.add(**user.dict())
+    return {"user_id": user_id}
+
+
+@router.get("/users/{id}", response_model=User)
+async def get_user(id_: int) -> User:
+    user = await UserRepository.get(id_)
+    return User(**user)
+
+

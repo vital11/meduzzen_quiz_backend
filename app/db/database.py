@@ -1,20 +1,11 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-
-from databases import Database
 import sqlalchemy
 import aioredis
 
-import settings
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from databases import Database
 
-# SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
-#
-# engine = create_engine(SQLALCHEMY_DATABASE_URL)
-#
-# SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-#
-# Base = declarative_base()
+import settings
 
 
 DATABASE_URL = settings.DATABASE_URL
@@ -22,6 +13,11 @@ DATABASE_URL = settings.DATABASE_URL
 database = Database(DATABASE_URL)
 
 metadata = sqlalchemy.MetaData()
+
+# engine = sqlalchemy.create_engine(DATABASE_URL)
+# metadata.create_all(bind=engine)
+# Base = declarative_base(metadata=metadata)
+# session_maker = sessionmaker(bind=engine)
 
 
 async def create_redis_client():
