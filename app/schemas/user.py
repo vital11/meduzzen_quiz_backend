@@ -1,17 +1,31 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr, EmailStr
 
 
-class UserBase(BaseModel):
-    email: str
+class SignUpRequestModel(BaseModel):
+    email: str | EmailStr
+    password: str | SecretStr
 
 
-class UserCreate(UserBase):
-    password: str
+class SignInRequestModel(BaseModel):
+    email: str | EmailStr
+    password: str | SecretStr
 
 
-class User(UserBase):
+class UserUpdateRequestModel(BaseModel):
+    email: str | EmailStr
+    password: str | SecretStr
+
+
+class User(BaseModel):
     id: int
+    email: str | EmailStr
+    password: str | SecretStr
     is_active: bool = None
 
     class Config:
         orm_mode = True
+
+
+class UsersListResponseModel(BaseModel):
+    users: list[User] = []
+
