@@ -1,41 +1,55 @@
 from databases import Database
+from databases.backends.postgres import Record
 from fastapi import HTTPException
 
 from app.db.tables.user import users
+from app.schemas.user import User, UserCreate, UserUpdate
 
 
 class UserRepository:
-    def __init__(self, db: Database, current_user=None, *args, **kwargs):
-        self._db = db
+    def __init__(self, db: Database, current_user=None):
+        self.db = db
 
-    @property
-    def db(self) -> Database:
-        return self._db
+    async def create(self, payload: UserCreate) -> User:
+        query = users.insert().values(
+            email=payload.email,
+            name=payload.name,
+            hashed_password=payload.password,
+            is_active=payload.is_active,
+            is_superuser=payload.is_superuser
+        ).returning(*users.c)
+        user_data: Record = await self.db.fetch_one(query=query)
+        user = User(**user_data)
+        return user
 
-    async def add(self, **user) -> int:
-        query = users.insert().values(**user)
-        user_id = await self.db.execute(query=query)
-        return user_id
-
-    async def get(self, id: int):
+    async def get(self, id: int) -> User:
         query = users.select().where(users.c.id == id)
-        row = await self.db.fetch_one(query=query)
-        return row
+        user_data: Record = await self.db.fetch_one(query=query)
+        user = User(**user_data)
+        return user
 
-    async def list(self) -> list:
+    async def get_all(self) -> list[User]:
         query = users.select()
-        rows = await self.db.fetch_all(query=query)
-        return rows
+        users_data: list[Record] = await self.db.fetch_all(query=query)
+        users_list = list(User(**data) for data in users_data)
+        return users_list
 
-    async def delete(self, id: int) -> None:
-        query = users.delete().where(users.c.id == id)
-        await self.db.execute(query=query)
-
-    async def update(self, id: int, payload) -> None:
+    async def update(self, id: int, payload: UserUpdate) -> User:
         query = users.select().where(users.c.id == id)
-        row = await self.db.fetch_one(query=query)
-        if row is None:
-            raise HTTPException(status_code=404, detail="User not found")
-        query = users.update().where(users.c.id == id).values(password=payload.password)
-        await self.db.execute(query=query)
+        user_data: Record = await self.db.fetch_one(query=query)
+        if user_data is None:
+            raise HTTPException(status_code=404, detail=f"User with id={id} not found.")
+        query = users.update().where(users.c.id == id).values(
+            name=payload.name,
+            hashed_password=payload.password
+        ).returning(*users.c)
+        user_data: Record = await self.db.fetch_one(query=query)
+        print('============', dict(user_data))
+        user = User(**user_data)
+        return user
 
+    async def delete(self, id: int) -> User:
+        query = users.delete().where(users.c.id == id).returning(*users.c)
+        user_data: Record = await self.db.fetch_one(query=query)
+        user = User(**user_data)
+        return user

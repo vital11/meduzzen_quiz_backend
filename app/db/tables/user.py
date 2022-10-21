@@ -1,12 +1,14 @@
-import sqlalchemy
+from sqlalchemy import Table, Column, Integer, String, Boolean
 
 from app.db.database import metadata
 
-users = sqlalchemy.Table(
+users = Table(
     "users",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("email", sqlalchemy.String),
-    sqlalchemy.Column("password", sqlalchemy.String),
-    sqlalchemy.Column("is_active", sqlalchemy.Boolean),
+    Column("id", Integer, primary_key=True, index=True),
+    Column("email", String, unique=True, index=True, nullable=False),
+    Column("name", String(50)),
+    Column("hashed_password", String, nullable=False),
+    Column("is_active", Boolean, default=True),
+    Column("is_superuser", Boolean, default=False),
 )
