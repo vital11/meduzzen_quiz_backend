@@ -44,7 +44,6 @@ class UserRepository:
             hashed_password=payload.password
         ).returning(*users.c)
         user_data: Record = await self.db.fetch_one(query=query)
-        print('============', dict(user_data))
         user = User(**user_data)
         return user
 
