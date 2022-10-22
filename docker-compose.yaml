@@ -1,17 +1,34 @@
 version: '3.8'
 
 services:
-  web:
-    build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - ./app:/code/app
+
+  db:
+    container_name: postgresql
+    image: postgres:alpine
+    restart: always
     ports:
-      - "8001:8000"
+      - ${TEMP_POSTGRES_PORT}:${POSTGRES_PORT}
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
+  app:
+    container_name: fastapi
+    build: .
+    command: bash -c "alembic upgrade head && uvicorn app.main:app --host ${SERVER_HOST} --port ${SERVER_PORT} --reload"
+    volumes:
+      - .:/code
+    ports:
+      - ${TEMP_SERVER_PORT}:${SERVER_PORT}
+    image: app:fastapi
+    depends_on:
+      - db
+    restart: always
 
-
-
-
-
-
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - ${REDIS_PORT}:${REDIS_PORT}
