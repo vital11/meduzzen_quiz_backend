@@ -2,8 +2,9 @@ from databases import Database
 from databases.backends.postgres import Record
 from fastapi import HTTPException
 
+from app.db.security import verify_password, get_password_hash
 from app.db.tables.user import users
-from app.schemas.user import User, UserCreate, UserUpdate
+from app.schemas.user import User, UserCreate, UserUpdate, UserInDB
 
 
 class UserRepository:
@@ -14,7 +15,7 @@ class UserRepository:
         query = users.insert().values(
             email=payload.email,
             name=payload.name,
-            hashed_password=payload.password,
+            hashed_password=get_password_hash(payload.password),
             is_active=payload.is_active,
             is_superuser=payload.is_superuser
         ).returning(*users.c)
@@ -52,3 +53,28 @@ class UserRepository:
         user_data: Record = await self.db.fetch_one(query=query)
         user = User(**user_data)
         return user
+
+    async def get_by_email(self, email: str, password=None) -> UserInDB | User | None:
+        query = users.select().where(users.c.email == email)
+        user_data: Record = await self.db.fetch_one(query=query)
+        if user_data is None:
+            raise HTTPException(status_code=404, detail=f"User with email={email} not found.")
+        user = UserInDB(**user_data) if password else User(**user_data)
+        return user
+
+    async def authenticate(self, email: str, password: str) -> User | None:
+        user_with_password: UserInDB = await self.get_by_email(email=email, password=True)
+        if not user_with_password:
+            return None
+        if not verify_password(password, user_with_password.hashed_password):
+            return None
+        user = User(**user_with_password.dict())
+        return user
+
+    @property
+    async def is_active(self) -> bool:
+        return await self.is_active
+
+    @property
+    async def is_superuser(self) -> bool:
+        return await self.is_superuser
