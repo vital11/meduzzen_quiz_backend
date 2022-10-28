@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-import settings
+from app.core import settings
 from app.db.metadata import metadata
 
 config = context.config

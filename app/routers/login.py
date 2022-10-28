@@ -1,18 +1,18 @@
 from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.db.database import database
-from app.db.dependencies import get_current_active_user
+from app.db.dependencies import get_current_user
 from app.db.repositories.user import UserRepository
-from app.db.security import create_access_token
 from app.schemas.token import Token
 from app.schemas.user import User
+from app.core.verification import create_access_token
+from app.core import settings
 
-import settings
 
-
-router = APIRouter()
+router = APIRouter(tags=["private"])
 
 
 @router.post("/token", response_model=Token)
@@ -36,5 +36,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 
 @router.get("/users/me/", response_model=User)
-async def read_users_me(current_user: User = Depends(get_current_active_user)) -> User:
+async def read_users_me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
+

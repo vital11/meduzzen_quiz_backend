@@ -174,5 +174,5 @@ pnpm-debug.log*
 /.env
 /alembic/versions/*
 /commands.md
-/settings.py
+/app/core/settings.py
 /draft.py
