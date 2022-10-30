@@ -1,5 +1,6 @@
 from datetime import datetime
 from functools import partial
+from typing import Optional
 
 from databases import Database
 from databases.backends.postgres import Record
@@ -57,16 +58,16 @@ class UserRepository:
         user = User(**user_dict)
         return user
 
-    async def get_by_email(self, email: str, password=None) -> UserInDB | User | None:
+    async def get_by_email(self, email: str, is_private: Optional[bool] = False) -> UserInDB | User | None:
         query = users.select().where(users.c.email == email)
         user_dict: Record = await self.db.fetch_one(query=query)
         if user_dict is None:
             raise HTTPException(status_code=404, detail=f"User with email={email} not found.")
-        user = UserInDB(**user_dict) if password else User(**user_dict)
+        user = UserInDB(**user_dict) if is_private else User(**user_dict)
         return user
 
-    async def authenticate(self, email: str, password: str) -> User | None:
-        user_with_password: UserInDB = await self.get_by_email(email=email, password=True)
+    async def authenticate(self, email: str, password: str) -> Optional[User]:
+        user_with_password: UserInDB = await self.get_by_email(email=email, is_private=True)
         if not user_with_password:
             return None
         if not verify_password(password, user_with_password.hashed_password):
