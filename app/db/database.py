@@ -1,9 +1,8 @@
 import sqlalchemy
 import aioredis
-
 from databases import Database
 
-import settings
+from app.core import settings
 
 
 DATABASE_URL = settings.DATABASE_URL

@@ -4,7 +4,8 @@ from app.db.database import database
 from app.db.repositories.user import UserRepository
 from app.schemas.user import User, UserCreate, UserUpdate
 
-router = APIRouter()
+
+router = APIRouter(tags=["users"])
 
 
 @router.post("/users/", response_model=User)
