@@ -1,10 +1,7 @@
-from datetime import datetime
-from functools import partial
 from typing import Optional
-
 from databases import Database
 from databases.backends.postgres import Record
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
 from app.db.tables.user import users
 from app.schemas.user import User, UserCreate, UserUpdate, UserInDB
@@ -27,9 +24,14 @@ class UserRepository:
         user = User(**user_dict)
         return user
 
-    async def get(self, id: int) -> User:
+    async def get(self, id: int) -> User | None:
         query = users.select().where(users.c.id == id)
         user_dict: Record = await self.db.fetch_one(query=query)
+        if user_dict is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User does not exist in the system"
+            )
         user = User(**user_dict)
         return user
 
@@ -39,22 +41,27 @@ class UserRepository:
         users_list = list(User(**data) for data in users_data)
         return users_list
 
-    async def update(self, id: int, payload: UserUpdate) -> User:
-        query = users.select().where(users.c.id == id)
-        user_dict: Record = await self.db.fetch_one(query=query)
-        if user_dict is None:
-            raise HTTPException(status_code=404, detail=f"User with id={id} not found.")
-        query = users.update().where(users.c.id == id).values(
-            name=payload.name,
-            hashed_password=get_password_hash(payload.password)
-        ).returning(*users.c)
+    async def update(self, payload: UserUpdate, current_user: User) -> User:
+        update_data: dict = payload.dict(exclude_unset=True)
+        if not update_data:
+            return current_user
+        if update_data.get("password") is not None:
+            hashed_password = get_password_hash(update_data.get("password"))
+            del update_data["password"]
+            update_data["hashed_password"] = hashed_password
+        query = users.update().where(users.c.id == current_user.id).values(**update_data).returning(*users.c)
         user_dict: Record = await self.db.fetch_one(query=query)
         user = User(**user_dict)
         return user
 
-    async def delete(self, id: int) -> User:
-        query = users.delete().where(users.c.id == id).returning(*users.c)
+    async def delete(self, current_user: User) -> User:
+        query = users.delete().where(users.c.id == current_user.id).returning(*users.c)
         user_dict: Record = await self.db.fetch_one(query=query)
+        if user_dict is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User does not exist in the system"
+            )
         user = User(**user_dict)
         return user
 
