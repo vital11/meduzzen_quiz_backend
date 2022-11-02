@@ -11,38 +11,33 @@ router = APIRouter()
 @router.post("/users/", response_model=User)
 async def create_user(payload: UserCreate) -> User:
     user_repo = UserRepository(db=database)
-    user = await user_repo.create(payload=payload)
-    return user
+    return await user_repo.create(payload=payload)
 
 
 @router.get("/users/{id}", response_model=User)
 async def read_user(id: int, current_user: User = Depends(get_current_user)) -> User:
     user_repo = UserRepository(db=database)
-    user = await user_repo.get(id=id)
-    return user
+    return await user_repo.get(id=id)
 
 
 @router.get("/users", response_model=list[User])
-async def read_users() -> list[User]:
+async def read_users(current_user: User = Depends(get_current_user)) -> list[User]:
     user_repo = UserRepository(db=database)
-    users = await user_repo.get_all()
-    return users
+    return await user_repo.get_all()
 
 
 @router.delete("/users/{id}", response_model=User)
 async def delete_user(id: int, current_user: User = Depends(get_current_active_superuser)) -> User:
     user_repo = UserRepository(db=database)
     user = await user_repo.get(id=id)
-    user = await user_repo.delete(current_user=user)
-    return user
+    return await user_repo.delete(current_user=user)
 
 
 @router.patch("/users/{id}", response_model=User)
 async def update_user(id: int, payload: UserUpdate, current_user: User = Depends(get_current_active_superuser)) -> User:
     user_repo = UserRepository(db=database)
     user = await user_repo.get(id=id)
-    user = await user_repo.update(payload=payload, current_user=user)
-    return user
+    return await user_repo.update(payload=payload, current_user=user)
 
 
 @router.get("/users/me/", response_model=User)
@@ -53,12 +48,10 @@ async def read_user_me(current_user: User = Depends(get_current_user)) -> User:
 @router.patch("/users/me", response_model=User)
 async def update_user_me(payload: UserUpdate, current_user: User = Depends(get_current_user)) -> User:
     user_repo = UserRepository(db=database)
-    user = await user_repo.update(payload=payload, current_user=current_user)
-    return user
+    return await user_repo.update(payload=payload, current_user=current_user)
 
 
 @router.delete("/users/me/", response_model=User)
 async def delete_user_me(current_user: User = Depends(get_current_user)) -> User:
     user_repo = UserRepository(db=database)
-    user = await user_repo.delete(current_user=current_user)
-    return user
+    return await user_repo.delete(current_user=current_user)

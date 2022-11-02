@@ -26,7 +26,6 @@ async def get_user_from_form_data(token: str) -> User:
         token_data = TokenData(email=email)
     except JWTError:
         raise credentials_exception
-
     user_repo = UserRepository(db=database)
     user = await user_repo.get_by_email(email=token_data.email)
     if user is None:
@@ -41,24 +40,19 @@ async def get_user_from_auth0(response: Response, token: str) -> User:
         return payload
     email: str = payload.get("https://example.com/email")
     token_data = TokenData(email=email)
-
     payload = UserCreate(
         email=token_data.email,
         password=str(datetime.now()),
     )
     user_repo = UserRepository(db=database)
-    user = await user_repo.get_or_create_by_email(payload=payload)
-
-    return user
+    return await user_repo.get_or_create_by_email(payload=payload)
 
 
 async def get_current_user(request: Request, response: Response, token=Depends(HTTPBearer())) -> User:
     cookie = request.cookies
     if "auth0" in str(cookie):
-        user = await get_user_from_auth0(token=token.credentials, response=response)
-    else:
-        user = await get_user_from_form_data(token=token.credentials)
-    return user
+        return await get_user_from_auth0(token=token.credentials, response=response)
+    return await get_user_from_form_data(token=token.credentials)
 
 
 def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:

@@ -21,10 +21,9 @@ class UserRepository:
             is_superuser=False
         ).returning(*users.c)
         user_dict: Record = await self.db.fetch_one(query=query)
-        user = User(**user_dict)
-        return user
+        return User(**user_dict)
 
-    async def get(self, id: int) -> User | None:
+    async def get(self, id: int) -> Optional[User]:
         query = users.select().where(users.c.id == id)
         user_dict: Record = await self.db.fetch_one(query=query)
         if user_dict is None:
@@ -32,14 +31,12 @@ class UserRepository:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"User does not exist in the system"
             )
-        user = User(**user_dict)
-        return user
+        return User(**user_dict)
 
     async def get_all(self) -> list[User]:
         query = users.select()
         users_data: list[Record] = await self.db.fetch_all(query=query)
-        users_list = list(User(**data) for data in users_data)
-        return users_list
+        return [User(**data) for data in users_data]
 
     async def update(self, payload: UserUpdate, current_user: User) -> User:
         update_data: dict = payload.dict(exclude_unset=True)
@@ -51,8 +48,7 @@ class UserRepository:
             update_data["hashed_password"] = hashed_password
         query = users.update().where(users.c.id == current_user.id).values(**update_data).returning(*users.c)
         user_dict: Record = await self.db.fetch_one(query=query)
-        user = User(**user_dict)
-        return user
+        return User(**user_dict)
 
     async def delete(self, current_user: User) -> User:
         query = users.delete().where(users.c.id == current_user.id).returning(*users.c)
@@ -62,16 +58,14 @@ class UserRepository:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"User does not exist in the system"
             )
-        user = User(**user_dict)
-        return user
+        return User(**user_dict)
 
     async def get_by_email(self, email: str, is_private: Optional[bool] = False) -> UserInDB | User | None:
         query = users.select().where(users.c.email == email)
         user_dict: Record = await self.db.fetch_one(query=query)
         if user_dict is None:
             raise HTTPException(status_code=404, detail=f"User with email={email} not found.")
-        user = UserInDB(**user_dict) if is_private else User(**user_dict)
-        return user
+        return UserInDB(**user_dict) if is_private else User(**user_dict)
 
     async def authenticate(self, email: str, password: str) -> Optional[User]:
         user_with_password: UserInDB = await self.get_by_email(email=email, is_private=True)
@@ -79,8 +73,7 @@ class UserRepository:
             return None
         if not verify_password(password, user_with_password.hashed_password):
             return None
-        user = User(**user_with_password.dict())
-        return user
+        return User(**user_with_password.dict())
 
     async def get_or_create_by_email(self, payload: UserCreate) -> User:
         query = users.select().where(users.c.email == payload.email)
@@ -94,5 +87,4 @@ class UserRepository:
                 is_superuser=False,
             ).returning(*users.c)
             user_dict: Record = await self.db.fetch_one(query=query)
-        user = User(**user_dict)
-        return user
+        return User(**user_dict)

@@ -13,8 +13,8 @@ from app.core import settings
 router = APIRouter(tags=["login"])
 
 
-@router.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()) -> dict:
+@router.post("/login", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()) -> Token:
     user_repo = UserRepository(db=database)
     user: User = await user_repo.authenticate(email=form_data.username, password=form_data.password)
     if not user:
@@ -30,4 +30,4 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     access_token = create_access_token(
         subject={"sub": user.email}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return Token(access_token=access_token, token_type="bearer")
