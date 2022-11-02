@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, SecretStr, EmailStr
+from pydantic import BaseModel, EmailStr, constr
 
 
 # Shared properties
@@ -14,13 +14,13 @@ class UserBase(BaseModel):
 # Properties to receive via API on creation
 class UserCreate(UserBase):
     email: EmailStr
-    password: str | SecretStr
+    password: constr(min_length=1, strip_whitespace=True)
 
 
 # Properties to receive via API on update
-class UserUpdate(UserBase):
-    password: Optional[str] = None
-    name: Optional[str] = None
+class UserUpdate(BaseModel):
+    password: Optional[constr(min_length=1, strip_whitespace=True)] = None
+    name: Optional[constr(min_length=1, strip_whitespace=True)] = None
 
 
 class UserInDBBase(UserBase):
