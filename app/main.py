@@ -4,8 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import settings
 from app.db.database import database
-from app.routers import check_health, user, login
-
+from app.routers import check_health, user, login, company
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -32,8 +31,9 @@ if settings.CORS_ALLOWED_ORIGINS:
 
 
 app.include_router(check_health.router)
-app.include_router(user.router)
 app.include_router(login.router)
+app.include_router(user.router)
+app.include_router(company.router)
 
 
 if __name__ == '__main__':

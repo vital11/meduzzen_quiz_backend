@@ -5,7 +5,7 @@ from app.db.dependencies import get_current_user, get_current_active_superuser
 from app.db.repositories.user import UserRepository
 from app.schemas.user import User, UserCreate, UserUpdate
 
-router = APIRouter()
+router = APIRouter(tags=["users"])
 
 
 @router.post("/users/", response_model=User)
@@ -45,7 +45,7 @@ async def read_user_me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-@router.patch("/users/me", response_model=User)
+@router.patch("/users/me/", response_model=User)
 async def update_user_me(payload: UserUpdate, current_user: User = Depends(get_current_user)) -> User:
     user_repo = UserRepository(db=database)
     return await user_repo.update(payload=payload, current_user=current_user)

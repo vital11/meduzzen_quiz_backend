@@ -2,4 +2,5 @@
 
 from app.db.database import metadata
 from app.db.tables.user import users
-from app.db.tables.company import companies
+from app.db.tables.company import companies, admins, members
+
