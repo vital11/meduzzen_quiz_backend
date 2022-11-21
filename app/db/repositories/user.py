@@ -4,7 +4,7 @@ from databases.backends.postgres import Record
 from fastapi import HTTPException, status
 from sqlalchemy import desc
 
-from app.db.tables.user import users
+from app.models.user import users
 from app.schemas.user import User, UserCreate, UserUpdate, UserInDB
 from app.core.verification import verify_password, get_password_hash
 
@@ -25,7 +25,7 @@ class UserRepository:
         return User(**user_dict)
 
     async def get(self, id: int) -> Optional[User]:
-        query = users.select().where(users.c.id == id)
+        query = users.select().where(users.c.id == id).options()
         user_dict: Record = await self.db.fetch_one(query=query)
         if user_dict is None:
             raise HTTPException(

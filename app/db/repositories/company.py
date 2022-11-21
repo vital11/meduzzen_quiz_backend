@@ -2,9 +2,12 @@ from typing import Optional
 from databases import Database
 from databases.backends.postgres import Record
 from fastapi import HTTPException, status
-from sqlalchemy import desc
+from sqlalchemy import desc, insert, select, and_
+from sqlalchemy.orm import joinedload, defaultload
 
-from app.db.tables.company import companies
+from app.models.company import companies
+from app.models.company import Company as CompanyModel
+from app.models.user import User as UserModel, users
 from app.schemas.company import CompanyCreate, Company, CompanyUpdate
 from app.schemas.user import User
 
@@ -74,3 +77,40 @@ class CompanyRepository:
         query = companies.update().where(companies.c.id == id).values(**update_data).returning(*companies.c)
         company_dict: Record = await self.db.fetch_one(query=query)
         return Company(**company_dict)
+
+    # Temp ORM
+    async def create_orm(self, payload: CompanyCreate, current_user: User) -> Company:
+        query = insert(CompanyModel).values(
+            name=payload.name,
+            description=payload.description,
+            is_private=payload.is_private,
+            owner_id=current_user.id
+        ).returning(CompanyModel)
+        company_dict: Record = await self.db.fetch_one(query=query)
+        return Company(**company_dict)
+
+    async def get_orm(self, id: int) -> Optional[Company]:
+
+        query = select(CompanyModel).where(CompanyModel.id == id).options(
+            # joinedload(CompanyModel.owner)
+            defaultload(CompanyModel.owner)
+        )
+
+        # query = select(CompanyModel).where(
+        #     CompanyModel.id == id).join(UserModel)
+
+        company_data: Record = await self.db.fetch_one(query=query)
+        print('------------', Company(**company_data))
+        if company_data is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Company with id={id} does not exist in the system"
+            )
+        return Company(**company_data)
+
+
+
+
+
+
+

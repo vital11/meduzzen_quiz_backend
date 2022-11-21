@@ -1,6 +1,8 @@
 from typing import Optional
 from pydantic import BaseModel, EmailStr, constr, validator
 
+# from app.schemas.company import Company
+
 
 # Shared properties
 class UserBase(BaseModel):
@@ -28,6 +30,7 @@ class UserUpdate(BaseModel):
 
 class UserInDBBase(UserBase):
     id: Optional[int] = None
+    companies: list = []
 
     class Config:
         orm_mode = True

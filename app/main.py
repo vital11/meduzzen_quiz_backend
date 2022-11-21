@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import settings
 from app.db.database import database
-from app.routers import check_health, user, login, company
+from app.routers import check_health, user, login, company, membership
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -34,6 +34,7 @@ app.include_router(check_health.router)
 app.include_router(login.router)
 app.include_router(user.router)
 app.include_router(company.router)
+app.include_router(membership.router)
 
 
 if __name__ == '__main__':

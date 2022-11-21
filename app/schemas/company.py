@@ -1,25 +1,23 @@
 from typing import Optional
 
 from pydantic import BaseModel, constr, validator
+from app.schemas.user import User
 
 
-# Shared properties
 class CompanyBase(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    is_private: Optional[bool]
+    is_private: Optional[bool] = False
 
 
 # Properties to receive on item creation
 class CompanyCreate(CompanyBase):
     name: constr(min_length=1, strip_whitespace=True)
     description: constr(min_length=1, strip_whitespace=True)
-    is_private: bool = False
 
 
 # Properties to receive on item update
 class CompanyUpdate(CompanyBase):
-    pass
 
     @validator('*')
     def empty_str_to_none(cls, value):
@@ -29,10 +27,8 @@ class CompanyUpdate(CompanyBase):
 # Properties shared by models stored in DB
 class CompanyInDBBase(CompanyBase):
     id: Optional[int] = None
-    name: str
-    description: str
-    owner_id: int
-    is_private: bool
+    owner_id: Optional[int] = None
+    owner: Optional[User] = []
 
     class Config:
         orm_mode = True
@@ -48,15 +44,3 @@ class CompanyInDB(CompanyInDBBase):
     pass
 
 
-# Many-to-Many Relationship
-class AssociationTable(BaseModel):
-    user_id: Optional[int] = None
-    company_id: Optional[int] = None
-
-
-class Admins(AssociationTable):
-    pass
-
-
-class Members(AssociationTable):
-    pass
