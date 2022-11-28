@@ -5,15 +5,15 @@ from app.schemas.user import User
 
 
 class CompanyBase(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
+    comp_name: Optional[str] = None
+    comp_description: Optional[str] = None
     is_private: Optional[bool] = False
 
 
 # Properties to receive on item creation
 class CompanyCreate(CompanyBase):
-    name: constr(min_length=1, strip_whitespace=True)
-    description: constr(min_length=1, strip_whitespace=True)
+    comp_name: constr(min_length=1, strip_whitespace=True)
+    comp_description: constr(min_length=1, strip_whitespace=True)
 
 
 # Properties to receive on item update
@@ -26,9 +26,9 @@ class CompanyUpdate(CompanyBase):
 
 # Properties shared by models stored in DB
 class CompanyInDBBase(CompanyBase):
-    id: Optional[int] = None
+    comp_id: Optional[int] = None
     owner_id: Optional[int] = None
-    owner: Optional[User] = []
+    owner: Optional[User] = None
 
     class Config:
         orm_mode = True
