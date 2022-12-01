@@ -18,6 +18,11 @@ class UserCreate(UserBase):
     password: constr(min_length=1, strip_whitespace=True)
 
 
+# Properties to receive via API on login
+class UserAuth(UserCreate):
+    pass
+
+
 # Properties to receive via API on update
 class UserUpdate(BaseModel):
     password: Optional[constr(strip_whitespace=True)] = None

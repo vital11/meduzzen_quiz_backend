@@ -1,4 +1,3 @@
-from typing import Any
 from databases import Database
 from databases.backends.postgres import Record
 from sqlalchemy import desc, insert, select, delete, update
@@ -10,7 +9,7 @@ from app.models.company import Company as CompanyModel
 from app.models.membership import Membership as MembershipModel, Member as MemberModel
 from app.schemas.user import User
 from app.schemas.company import Company
-from app.schemas.membership import (Membership, MembershipTypes, MembershipApplication, MembershipQuery,
+from app.schemas.membership import (Membership, MembershipTypes, MembershipCreate, MembershipQuery,
                                     Member, MemberUpdate)
 
 
@@ -19,7 +18,7 @@ class MembershipRepository:
         self.db = db
         self.current_user = current_user
 
-    async def create_membership(self, payload: MembershipApplication) -> Membership:
+    async def create_membership(self, payload: MembershipCreate) -> Membership:
         try:
             company = await self._get_company(payload=payload)
             is_acceptable = (payload.membership_type == MembershipTypes.invite
@@ -171,7 +170,7 @@ class MembershipRepository:
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Member')
 
-    async def _get_company(self, payload: Any) -> Company:
+    async def _get_company(self, payload: MembershipCreate | MemberUpdate) -> Company:
         try:
             query = select(CompanyModel).filter(CompanyModel.comp_id == payload.company_id)
             company: Record = await self.db.fetch_one(query=query)

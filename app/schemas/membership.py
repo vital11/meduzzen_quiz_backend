@@ -16,7 +16,7 @@ class MembershipBase(BaseModel):
 
 
 # Properties to receive via API on creation
-class MembershipApplication(MembershipBase):
+class MembershipCreate(MembershipBase):
     user_id: int
     company_id: int
     membership_type: MembershipTypes

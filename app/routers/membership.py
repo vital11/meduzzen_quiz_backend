@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.db.database import database
 from app.db.dependencies import get_current_user, get_current_active_superuser
 from app.db.repositories.membership import MembershipRepository
-from app.schemas.membership import Membership, MembershipApplication, MembershipQuery, Member, MemberUpdate
+from app.schemas.membership import Membership, MembershipCreate, MembershipQuery, Member, MemberUpdate
 from app.schemas.user import User
 
 router = APIRouter(tags=['memberships'])
@@ -11,7 +11,7 @@ router = APIRouter(tags=['memberships'])
 
 @router.post('/companies/memberships/', response_model=Membership)
 async def create_membership(
-        payload: MembershipApplication, current_user: User = Depends(get_current_user)) -> Membership:
+        payload: MembershipCreate, current_user: User = Depends(get_current_user)) -> Membership:
     membership_repo = MembershipRepository(db=database, current_user=current_user)
     return await membership_repo.create_membership(payload=payload)
 
