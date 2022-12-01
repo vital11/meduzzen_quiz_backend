@@ -5,7 +5,7 @@ from app.db.database import Base
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
@@ -14,7 +14,11 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
 
-    companies = relationship("Company", back_populates="owner")
+    companies = relationship('Company', back_populates='owner')
+
+    memberships = relationship('Membership', back_populates='user')
+
+    member_companies = relationship('Member', back_populates='member')
 
 
 users = User.__table__

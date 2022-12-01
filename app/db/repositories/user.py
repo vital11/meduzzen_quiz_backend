@@ -3,6 +3,7 @@ from databases import Database
 from databases.backends.postgres import Record
 from fastapi import HTTPException, status
 from sqlalchemy import desc
+from loguru import logger
 
 from app.models.user import users
 from app.schemas.user import User, UserCreate, UserUpdate, UserInDB
@@ -21,8 +22,9 @@ class UserRepository:
             is_active=True,
             is_superuser=False
         ).returning(*users.c)
-        user_dict: Record = await self.db.fetch_one(query=query)
-        return User(**user_dict)
+        user: Record = await self.db.fetch_one(query=query)
+        logger.info(f'Account {user.email} created successfully')
+        return User(**user)
 
     async def get(self, id: int) -> Optional[User]:
         query = users.select().where(users.c.id == id).options()

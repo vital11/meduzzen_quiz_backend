@@ -175,3 +175,4 @@ pnpm-debug.log*
 /alembic/versions/*
 /commands.md
 /draft.py
+/app/core/info.json

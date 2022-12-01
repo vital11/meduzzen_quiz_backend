@@ -1,7 +1,5 @@
 from typing import Optional
-
 from pydantic import BaseModel, constr, validator
-from app.schemas.user import User
 
 
 class CompanyBase(BaseModel):
@@ -28,7 +26,6 @@ class CompanyUpdate(CompanyBase):
 class CompanyInDBBase(CompanyBase):
     comp_id: Optional[int] = None
     owner_id: Optional[int] = None
-    owner: Optional[User] = None
 
     class Config:
         orm_mode = True
@@ -42,5 +39,3 @@ class Company(CompanyInDBBase):
 # Properties stored in DB
 class CompanyInDB(CompanyInDBBase):
     pass
-
-

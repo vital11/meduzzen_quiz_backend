@@ -1,121 +1,180 @@
+from typing import Any
 from databases import Database
 from databases.backends.postgres import Record
-from fastapi import HTTPException, status
-from sqlalchemy import desc, insert, select
+from sqlalchemy import desc, insert, select, delete, update
 from asyncpg.exceptions import UniqueViolationError, ForeignKeyViolationError
+from sqlalchemy.orm import joinedload
 
-from app.models.company import memberships, Membership as MembershipModel, Company as CompanyModel
-from app.schemas.membership import Membership, MembershipTypes, MembershipApplication, MembershipQuery
-from app.schemas.company import Company
+from app.core.exception import NotAuthorizedError, NotFoundError, UniqueError
+from app.models.company import Company as CompanyModel
+from app.models.membership import Membership as MembershipModel, Member as MemberModel
 from app.schemas.user import User
+from app.schemas.company import Company
+from app.schemas.membership import (Membership, MembershipTypes, MembershipApplication, MembershipQuery,
+                                    Member, MemberUpdate)
 
 
 class MembershipRepository:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, current_user: User = None):
         self.db = db
+        self.current_user = current_user
 
-    async def get_current_company(self, payload: Membership | MembershipApplication) -> Company:
-        comp_id = payload.company_id
-        if comp_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Could not validate Company id"
-            )
-        query = select(CompanyModel).where(CompanyModel.comp_id == comp_id)
-        company_data: Record = await self.db.fetch_one(query=query)
-        if company_data is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Company with id={comp_id} does not exist in the system"
-            )
-        return Company(**company_data)
-
-    async def create(self, payload: MembershipApplication, current_user: User) -> Membership:
-        current_company = await self.get_current_company(payload=payload)
-        is_owner = (payload.membership_type == MembershipTypes.invite and payload.user_id == current_user.id or
-                    payload.membership_type == MembershipTypes.request and payload.user_id == current_company.owner_id)
-        if is_owner:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User with these credentials is the owner of the company"
-            )
-        query = insert(MembershipModel).values(
-            user_id=payload.user_id,
-            company_id=payload.company_id,
-            membership_type=payload.membership_type,
-        ).returning(MembershipModel)
+    async def create_membership(self, payload: MembershipApplication) -> Membership:
         try:
-            membership_dict: Record = await self.db.fetch_one(query=query)
-            return Membership(**membership_dict)
+            company = await self._get_company(payload=payload)
+            is_acceptable = (payload.membership_type == MembershipTypes.invite
+                             and self.current_user.id == company.owner_id
+                             and self.current_user.id != payload.user_id
+                             or
+                             payload.membership_type == MembershipTypes.request
+                             and self.current_user.id != company.owner_id
+                             and self.current_user.id == payload.user_id)
+            if not is_acceptable:
+                raise NotAuthorizedError(f'You can send an invitation to your company to any user except yourself. '
+                                         f'As well as send a request to join any company other than your own')
+            query = insert(MembershipModel).values(
+                user_id=payload.user_id,
+                company_id=payload.company_id,
+                membership_type=payload.membership_type,
+            ).returning(MembershipModel)
+            membership: Record = await self.db.fetch_one(query=query)
+            return Membership(**membership)
         except UniqueViolationError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Membership with this credentials already exist"
-            )
-        except ForeignKeyViolationError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User or Company with this credentials does not exist"
-            )
+            raise UniqueError(obj_name='Membership')
+        except (ForeignKeyViolationError, AttributeError):
+            raise NotFoundError(obj_name='Membership')
 
-    async def get_all(self) -> list[Membership]:
-        query = memberships.select().order_by(desc(memberships.c.membership_id))
+    async def get_memberships(self) -> list[Membership]:
+        query = select(MembershipModel).order_by(desc(MembershipModel.membership_id))
         memberships_data: list[Record] = await self.db.fetch_all(query=query)
-        if memberships_data is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"There are no memberships in the system"
-            )
         return [Membership(**data) for data in memberships_data]
 
-    async def filter(self, q: MembershipQuery, current_user: User) -> list[Membership]:
+    async def get_memberships_filtered(self, q: MembershipQuery) -> list[Membership]:
         q_data: dict = q.dict(exclude_unset=True, exclude_none=True)
         query = ''
 
-        if not q_data and not current_user.is_superuser:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"The user doesn't have enough privileges"
-            )
-
-        # all memberships
-        if not q_data and current_user.is_superuser:
+        # All memberships
+        if not q_data and self.current_user.is_superuser:
             query = select(MembershipModel).order_by(desc(MembershipModel.membership_id))
 
-        # Current company invites
+        if not q_data and not self.current_user.is_superuser:
+            raise NotAuthorizedError
+
+        # Company invites
         if q.membership_type == MembershipTypes.invite and q.company_id:
-            current_company = await self.get_current_company(payload=q)
             query = select(MembershipModel).filter(
                 MembershipModel.membership_type == MembershipTypes.invite,
-                MembershipModel.company_id == current_company.comp_id,
-            ).order_by(desc(memberships.c.membership_id))
+                MembershipModel.company_id == q.company_id,
+            ).order_by(desc(MembershipModel.membership_id))
 
-        # Current company requests
+        # Company requests
         if q.membership_type == MembershipTypes.request and q.company_id:
-            current_company = await self.get_current_company(payload=q)
             query = select(MembershipModel).filter(
                 MembershipModel.membership_type == MembershipTypes.request,
-                MembershipModel.company_id == current_company.comp_id,
-            ).order_by(desc(memberships.c.membership_id))
+                MembershipModel.company_id == q.company_id,
+            ).order_by(desc(MembershipModel.membership_id))
 
-        # Current user invites
+        # User Me invites
         if q.membership_type == MembershipTypes.invite and not q.company_id:
             query = select(MembershipModel).filter(
-                MembershipModel.user_id == current_user.id,
+                MembershipModel.user_id == self.current_user.id,
                 MembershipModel.membership_type == MembershipTypes.invite,
-            ).order_by(desc(memberships.c.membership_id))
+            ).order_by(desc(MembershipModel.membership_id))
 
-        # Current user requests
+        # User Me requests
         if q.membership_type == MembershipTypes.request and not q.company_id:
             query = select(MembershipModel).filter(
-                MembershipModel.user_id == current_user.id,
+                MembershipModel.user_id == self.current_user.id,
                 MembershipModel.membership_type == MembershipTypes.request
-            ).order_by(desc(memberships.c.membership_id))
+            ).order_by(desc(MembershipModel.membership_id))
 
         memberships_data: list[Record] = await self.db.fetch_all(query=query)
-        if memberships_data is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"There are no memberships in the system"
-            )
         return [Membership(**data) for data in memberships_data]
+
+    async def delete_membership(self, id: int) -> Membership:
+        try:
+            query = select(MembershipModel).filter(MembershipModel.membership_id == id).options(
+                joinedload(MembershipModel.company))
+            membership: Record = await self.db.fetch_one(query=query)
+            if self.current_user.id not in (membership.user_id, membership.owner_id):
+                raise NotAuthorizedError
+            query = delete(MembershipModel).filter(MembershipModel.membership_id == id).returning(MembershipModel)
+            membership: Record = await self.db.fetch_one(query=query)
+            return Membership(**membership)
+        except (TypeError, AttributeError):
+            raise NotFoundError(obj_name='Membership')
+
+    async def create_member(self, payload: Membership) -> Member:
+        try:
+            query = select(MembershipModel).filter(
+                MembershipModel.membership_id == payload.membership_id).options(
+                joinedload(MembershipModel.company))
+            membership: Record = await self.db.fetch_one(query=query)
+            is_acceptable = (payload.membership_type == MembershipTypes.invite
+                             and self.current_user.id != membership.owner_id
+                             and self.current_user.id == payload.user_id
+                             or
+                             payload.membership_type == MembershipTypes.request
+                             and self.current_user.id == membership.owner_id
+                             and self.current_user.id != payload.user_id)
+            if not is_acceptable:
+                raise NotAuthorizedError(f'You can accept an invitation from any company other than your own. '
+                                         f'As well as accept a request to your company from any user except yourself')
+            query = insert(MemberModel).values(
+                user_id=payload.user_id,
+                company_id=payload.company_id,
+                is_admin=False,
+            ).returning(MemberModel)
+            member: Record = await self.db.fetch_one(query=query)
+            await self.delete_membership(id=membership.membership_id)
+            return Member(**member)
+        except UniqueViolationError:
+            query = delete(MembershipModel).filter(MembershipModel.membership_id == payload.membership_id)
+            await self.db.execute(query=query)
+            raise UniqueError(obj_name='Member')
+        except (TypeError, AttributeError):
+            raise NotFoundError(obj_name='Membership')
+
+    async def get_members(self, company_id: int) -> list[Member]:
+        query = select(MemberModel).filter(MemberModel.company_id == company_id).options(
+            joinedload(MemberModel.member)
+        ).order_by(desc(MemberModel.m_id))
+        members_data: list[Record] = await self.db.fetch_all(query=query)
+        return [Member(**data) for data in members_data]
+
+    async def update_member(self, payload: MemberUpdate) -> Member:
+        try:
+            company = await self._get_company(payload=payload)
+            if company.owner_id != self.current_user.id:
+                raise NotAuthorizedError(f'You are not the owner of the Company id={company.comp_id}')
+            if company.owner_id == payload.user_id:
+                raise NotAuthorizedError(f'You are the owner of the Company id={company.comp_id} '
+                                         f'until the end of time')
+            query = update(MemberModel).filter(
+                MemberModel.company_id == payload.company_id, MemberModel.user_id == payload.user_id
+            ).values(is_admin=payload.is_admin).returning(MemberModel)
+            member: Record = await self.db.fetch_one(query=query)
+            return Member(**member)
+        except TypeError:
+            raise NotFoundError(obj_name='Member')
+
+    async def delete_member(self, id: int) -> Member:
+        try:
+            query = select(MemberModel).filter(MemberModel.m_id == id).options(
+                joinedload(MemberModel.company))
+            member: Record = await self.db.fetch_one(query=query)
+            if self.current_user.id not in (member.user_id, member.owner_id):
+                raise NotAuthorizedError
+            query = delete(MemberModel).filter(MemberModel.m_id == id).returning(MemberModel)
+            member: Record = await self.db.fetch_one(query=query)
+            return Member(**member)
+        except (TypeError, AttributeError):
+            raise NotFoundError(obj_name='Member')
+
+    async def _get_company(self, payload: Any) -> Company:
+        try:
+            query = select(CompanyModel).filter(CompanyModel.comp_id == payload.company_id)
+            company: Record = await self.db.fetch_one(query=query)
+            return Company(**company)
+        except TypeError:
+            raise NotFoundError(obj_name='Company')
