@@ -1,15 +1,12 @@
-import sqlalchemy
 import aioredis
+from sqlalchemy.ext.declarative import declarative_base
 from databases import Database
 
 from app.core import settings
 
 
-DATABASE_URL = settings.DATABASE_URL
-
-database = Database(DATABASE_URL)
-
-metadata = sqlalchemy.MetaData()
+database = Database(settings.DATABASE_URL)
+Base = declarative_base()
 
 
 async def create_redis_client():

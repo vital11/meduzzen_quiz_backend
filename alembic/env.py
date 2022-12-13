@@ -1,12 +1,11 @@
 from logging.config import fileConfig
-from typing import Union, List
 
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
 from app.core import settings
-from app.db.metadata import metadata
+from app.db.base import Base
 
 config = context.config
 
@@ -17,7 +16,7 @@ fileConfig(config.config_file_name)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata: Union[str, List] = [metadata]
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

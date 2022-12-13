@@ -2,14 +2,16 @@ from typing import Optional
 from databases import Database
 from databases.backends.postgres import Record
 from fastapi import HTTPException, status
+from sqlalchemy import desc
+from loguru import logger
 
-from app.db.tables.user import users
+from app.models.user import users
 from app.schemas.user import User, UserCreate, UserUpdate, UserInDB
 from app.core.verification import verify_password, get_password_hash
 
 
 class UserRepository:
-    def __init__(self, db: Database, current_user=None):
+    def __init__(self, db: Database):
         self.db = db
 
     async def create(self, payload: UserCreate) -> User:
@@ -20,11 +22,12 @@ class UserRepository:
             is_active=True,
             is_superuser=False
         ).returning(*users.c)
-        user_dict: Record = await self.db.fetch_one(query=query)
-        return User(**user_dict)
+        user: Record = await self.db.fetch_one(query=query)
+        logger.info(f'Account {user.email} created successfully')
+        return User(**user)
 
     async def get(self, id: int) -> Optional[User]:
-        query = users.select().where(users.c.id == id)
+        query = users.select().where(users.c.id == id).options()
         user_dict: Record = await self.db.fetch_one(query=query)
         if user_dict is None:
             raise HTTPException(
@@ -34,12 +37,12 @@ class UserRepository:
         return User(**user_dict)
 
     async def get_all(self) -> list[User]:
-        query = users.select()
+        query = users.select().order_by(desc(users.c.id))
         users_data: list[Record] = await self.db.fetch_all(query=query)
         return [User(**data) for data in users_data]
 
     async def update(self, payload: UserUpdate, current_user: User) -> User:
-        update_data: dict = payload.dict(exclude_unset=True)
+        update_data: dict = payload.dict(exclude_unset=True, exclude_none=True)
         if not update_data:
             return current_user
         if update_data.get("password") is not None:

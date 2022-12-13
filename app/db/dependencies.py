@@ -1,8 +1,9 @@
-from fastapi import Depends, Request, Response, HTTPException, status
+from fastapi import Depends, Response, HTTPException, status
 from fastapi.security import HTTPBearer
 from datetime import datetime
-
+from jwt import decode
 from jose import jwt, JWTError
+
 
 from app.db.database import database
 from app.db.repositories.user import UserRepository
@@ -12,7 +13,7 @@ from app.core.verification import VerifyToken
 from app.core import settings
 
 
-async def get_user_from_form_data(token: str) -> User:
+async def get_user_from_form(token: str) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -48,11 +49,11 @@ async def get_user_from_auth0(response: Response, token: str) -> User:
     return await user_repo.get_or_create_by_email(payload=payload)
 
 
-async def get_current_user(request: Request, response: Response, token=Depends(HTTPBearer())) -> User:
-    cookie = request.cookies
-    if "auth0" in str(cookie):
+async def get_current_user(response: Response, token=Depends(HTTPBearer())) -> User:
+    payload = decode(token.credentials, options={"verify_signature": False})
+    if payload.get("aud"):
         return await get_user_from_auth0(token=token.credentials, response=response)
-    return await get_user_from_form_data(token=token.credentials)
+    return await get_user_from_form(token=token.credentials)
 
 
 def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
