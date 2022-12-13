@@ -12,9 +12,9 @@ class Company(Base):
     comp_description = Column(String(500))
     is_private = Column(Boolean, default=False)
 
-    owner_id = Column(Integer, ForeignKey('users.id'), primary_key=True)
-    owner = relationship('User', back_populates='companies')
+    owner_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE', onupdate='CASCADE'))
+    owner = relationship('User', back_populates='companies', passive_deletes=True)
 
-    memberships = relationship('Membership', back_populates='company')
+    memberships = relationship('Membership', back_populates='company', cascade='all, delete')
 
-    members = relationship('Member', back_populates='company')
+    members = relationship('Member', back_populates='company', cascade='all, delete')

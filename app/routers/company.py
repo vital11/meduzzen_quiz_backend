@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends
 
 from app.db.database import database
@@ -29,10 +31,11 @@ async def read_companies(current_user: User = Depends(get_current_user)) -> list
     return await company_repo.get_all()
 
 
-@router.delete('/companies/{id}', response_model=Company)
-async def delete_company(id: int, current_user: User = Depends(get_current_user)) -> Company:
+@router.get('/companies/owner/', response_model=list[Company])
+async def read_owner_companies(
+        id: int | None = None, current_user: User = Depends(get_current_user)) -> list[Company]:
     company_repo = CompanyRepository(db=database, current_user=current_user)
-    return await company_repo.delete(id=id)
+    return await company_repo.get_by_owner(user_id=id)
 
 
 @router.patch('/companies/{id}', response_model=Company)
@@ -42,7 +45,7 @@ async def update_company(
     return await company_repo.update(id=id, payload=payload)
 
 
-@router.get('/companies/me/owner', response_model=list[Company])
-async def read_companies_me_owner(current_user: User = Depends(get_current_user)) -> list[Company]:
+@router.delete('/companies/{id}', response_model=Company)
+async def delete_company(id: int, current_user: User = Depends(get_current_user)) -> Company:
     company_repo = CompanyRepository(db=database, current_user=current_user)
-    return await company_repo.get_my()
+    return await company_repo.delete(id=id)

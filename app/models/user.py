@@ -14,11 +14,11 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
 
-    companies = relationship('Company', back_populates='owner')
+    companies = relationship('Company', back_populates='owner', cascade='all, delete')
 
-    memberships = relationship('Membership', back_populates='user')
+    memberships = relationship('Membership', back_populates='user', cascade='all, delete')
 
-    member_companies = relationship('Member', back_populates='member')
+    member_companies = relationship('Member', back_populates='member', cascade='all, delete')
 
 
 users = User.__table__

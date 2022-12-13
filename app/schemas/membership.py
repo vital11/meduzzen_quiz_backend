@@ -34,7 +34,7 @@ class Membership(MembershipInDBBase):
     pass
 
 
-class MembershipQuery(Membership):
+class MembershipParams(Membership):
 
     @validator('*')
     def empty_str_to_none(cls, value):
@@ -62,6 +62,14 @@ class MemberInDBBase(MemberBase):
         orm_mode = True
 
 
-# Additional properties to return via API
 class Member(MemberInDBBase):
+    pass
+
+
+# Additional properties to return via API
+class CompanyMember(MemberInDBBase):
     email: Optional[EmailStr]
+
+
+class MemberCompany(MemberInDBBase):
+    comp_name: Optional[str]

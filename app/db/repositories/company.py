@@ -1,9 +1,13 @@
+from typing import Optional
+
 from asyncpg import UniqueViolationError
 from databases import Database
 from databases.backends.postgres import Record
 from sqlalchemy import desc, insert, select, delete, update
+from sqlalchemy.orm import joinedload
 
 from app.core.exception import UniqueError, NotFoundError, NotAuthorizedError
+from app.models.user import User as UserModel
 from app.models.company import Company as CompanyModel
 from app.schemas.company import Company, CompanyCreate, CompanyUpdate
 from app.schemas.user import User
@@ -43,16 +47,17 @@ class CompanyRepository:
         return [company for company in companies_list
                 if not (company.is_private and company.owner_id != self.current_user.id)]
 
-    async def get_my(self) -> list[Company]:
-        query = select(CompanyModel).filter(
-            CompanyModel.owner_id == self.current_user.id).order_by(desc(CompanyModel.comp_id))
+    async def get_by_owner(self, user_id: Optional[int]) -> list[Company]:
+        user_id = user_id or self.current_user.id
+        query = select(CompanyModel).filter(CompanyModel.owner_id == user_id).order_by(desc(CompanyModel.comp_id))
         companies_data: list[Record] = await self.db.fetch_all(query=query)
         return [Company(**data) for data in companies_data]
 
     async def update(self, id: int, payload: CompanyUpdate) -> Company:
         try:
             update_data: dict = payload.dict(exclude_unset=True, exclude_none=True)
-            company: Company = await self._get_company(id=id)
+            query = select(CompanyModel).filter(CompanyModel.comp_id == id)
+            company: Record = await self.db.fetch_one(query=query)
             if company.owner_id != self.current_user.id:
                 raise NotAuthorizedError(f'You are not the owner of the Company id={id}')
             query = update(CompanyModel).filter(
@@ -64,7 +69,8 @@ class CompanyRepository:
 
     async def delete(self, id: int) -> Company:
         try:
-            company: Company = await self._get_company(id=id)
+            query = select(CompanyModel).filter(CompanyModel.comp_id == id)
+            company: Record = await self.db.fetch_one(query=query)
             if company.owner_id != self.current_user.id:
                 raise NotAuthorizedError(f'You are not the owner of the Company id={id}')
             query = delete(CompanyModel).filter(CompanyModel.comp_id == id).returning(CompanyModel)
