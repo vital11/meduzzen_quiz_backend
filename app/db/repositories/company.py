@@ -1,13 +1,10 @@
 from typing import Optional
-
 from asyncpg import UniqueViolationError
 from databases import Database
 from databases.backends.postgres import Record
 from sqlalchemy import desc, insert, select, delete, update
-from sqlalchemy.orm import joinedload
 
 from app.core.exception import UniqueError, NotFoundError, NotAuthorizedError
-from app.models.user import User as UserModel
 from app.models.company import Company as CompanyModel
 from app.schemas.company import Company, CompanyCreate, CompanyUpdate
 from app.schemas.user import User

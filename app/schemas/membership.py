@@ -73,3 +73,9 @@ class CompanyMember(MemberInDBBase):
 
 class MemberCompany(MemberInDBBase):
     comp_name: Optional[str]
+
+
+class MemberList(BaseModel):
+    members: Optional[list[int]]
+    admins: Optional[list[int]]
+    owner: int

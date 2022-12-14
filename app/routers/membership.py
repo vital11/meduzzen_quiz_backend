@@ -1,13 +1,12 @@
-from typing import Union
-
 from fastapi import APIRouter, Depends
 
 from app.db.database import database
 from app.db.dependencies import get_current_user, get_current_active_superuser
 from app.db.repositories.membership import MembershipRepository
-from app.schemas.membership import Membership, MembershipCreate, MembershipParams, Member, MemberUpdate, CompanyMember, \
-    MemberCompany
 from app.schemas.user import User
+from app.schemas.membership import (Membership, MembershipCreate, MembershipParams,
+                                    Member, MemberUpdate, CompanyMember, MemberCompany)
+
 
 router = APIRouter(tags=['memberships'])
 
