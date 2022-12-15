@@ -1,6 +1,5 @@
-from sqlalchemy import Column, Integer, ForeignKey, String, ARRAY
+from sqlalchemy import Column, Integer, ForeignKey, String, ARRAY, UniqueConstraint, PrimaryKeyConstraint
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.mutable import MutableList
 
 from app.db.database import Base
 
@@ -22,11 +21,14 @@ class Quiz(Base):
 class Question(Base):
     __tablename__ = 'questions'
 
-    question_id = Column(Integer, primary_key=True, index=True)
     question_name = Column(String(200))
-    # answers = Column(MutableList.as_mutable(ARRAY(String)))
-    answers = Column(String(200))
+    answers = Column(ARRAY(String))
     right_answer = Column(String(200))
 
     quiz_id = Column(Integer, ForeignKey('quizzes.quiz_id', ondelete='CASCADE', onupdate='CASCADE'))
     quiz = relationship('Quiz', back_populates='questions', cascade='save-update')
+
+    __table_args__ = (
+        UniqueConstraint('question_name', 'quiz_id', name='uniq_con'),
+        PrimaryKeyConstraint('question_name', 'quiz_id', name='pk_con'),
+    )

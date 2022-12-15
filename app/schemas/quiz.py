@@ -1,32 +1,31 @@
 from typing import Optional
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, conlist
 
 
 class QuestionBase(BaseModel):
+    quiz_id: Optional[int] = None
     question_name: Optional[str] = None
     answers: Optional[list[str]] = None
     right_answer: Optional[str] = None
-    quiz_id: Optional[int] = None
 
 
 # Properties to receive via API on creation
 class QuestionCreate(QuestionBase):
+    quiz_id: Optional[int]
     question_name: str
-    # answers: list[str]
-    # right_answer: str
-    right_answers: Optional[list[str]]
-    right_answer: Optional[str]
+    answers: conlist(item_type=str, min_items=2, max_items=10, unique_items=True)
+    right_answer: str
 
 
-class QuestionUpdate(QuestionBase):
-    question_name: Optional[str]
-    # answers: Optional[list[str]]
-    answers: Optional[str]
-    right_answer: Optional[str]
+class QuestionUpdate(QuestionCreate):
+    answers: conlist(item_type=str, max_items=10, unique_items=True)
+
+
+class QuestionDelete(QuestionUpdate):
+    question_name: str
 
 
 class QuestionInDBBase(QuestionBase):
-    question_id: Optional[int] = None
 
     class Config:
         orm_mode = True
@@ -35,13 +34,6 @@ class QuestionInDBBase(QuestionBase):
 # Additional properties to return via API
 class Question(QuestionInDBBase):
     pass
-
-
-class QuestionParams(Question):
-
-    @validator('*')
-    def empty_str_to_none(cls, value):
-        return None if value == '' else value
 
 
 # Shared properties
@@ -56,17 +48,14 @@ class QuizBase(BaseModel):
 # Properties to receive via API on creation
 class QuizCreate(QuizBase):
     quiz_name: str
-    company_id: int
+    questions: Optional[conlist(item_type=QuestionCreate, min_items=2)]
 
 
-class QuizUpdate(BaseModel):
+class QuizUpdate(QuizBase):
+    quiz_id: Optional[int]
     quiz_name: Optional[str]
     quiz_description: Optional[str]
-    questions: Optional[list[QuestionUpdate]]
-
-    @validator('*')
-    def empty_str_to_none(cls, value):
-        return None if value == '' else value
+    questions: Optional[conlist(item_type=QuestionUpdate, min_items=2)]
 
 
 class QuizInDBBase(QuizBase):
