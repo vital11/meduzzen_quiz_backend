@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, conlist
+from pydantic import BaseModel, conlist, validator, constr
 
 
 class QuestionBase(BaseModel):
@@ -11,7 +11,6 @@ class QuestionBase(BaseModel):
 
 # Properties to receive via API on creation
 class QuestionCreate(QuestionBase):
-    quiz_id: Optional[int]
     question_name: str
     answers: conlist(item_type=str, min_items=2, max_items=10, unique_items=True)
     right_answer: str
@@ -23,6 +22,12 @@ class QuestionUpdate(QuestionCreate):
 
 class QuestionDelete(QuestionUpdate):
     question_name: str
+
+
+class QuestionsUpdate(QuestionCreate):
+    quiz_id: int
+    company_id: int
+    questions: Optional[list[QuestionUpdate]] | Optional[list[QuestionDelete]]
 
 
 class QuestionInDBBase(QuestionBase):
@@ -47,8 +52,10 @@ class QuizBase(BaseModel):
 
 # Properties to receive via API on creation
 class QuizCreate(QuizBase):
-    quiz_name: str
-    questions: Optional[conlist(item_type=QuestionCreate, min_items=2)]
+    quiz_name: constr(min_length=1, strip_whitespace=True)
+    quiz_description: Optional[str]
+    questions: conlist(item_type=QuestionCreate, min_items=2)
+    company_id: int
 
 
 class QuizUpdate(QuizBase):
@@ -56,6 +63,10 @@ class QuizUpdate(QuizBase):
     quiz_name: Optional[str]
     quiz_description: Optional[str]
     questions: Optional[conlist(item_type=QuestionUpdate, min_items=2)]
+
+    @validator('*')
+    def empty_str_to_none(cls, value):
+        return None if value == '' else value
 
 
 class QuizInDBBase(QuizBase):
@@ -68,3 +79,11 @@ class QuizInDBBase(QuizBase):
 # Additional properties to return via API
 class Quiz(QuizInDBBase):
     pass
+
+
+class DescriptionUpdate(QuizBase):
+    quiz_id: int
+
+    @validator('*')
+    def empty_str_to_none(cls, value):
+        return None if value == '' else value

@@ -1,14 +1,15 @@
+from typing import Optional
+
 from asyncpg import UniqueViolationError
 from databases import Database
 from databases.backends.postgres import Record
 from sqlalchemy import desc, insert, select, delete, update, and_
 from sqlalchemy.orm import joinedload
 
-from app.core.exception import UniqueError, NotFoundError, NotAuthorizedError
-from app.models.company import Company as CompanyModel
+from app.core.exception import UniqueError, NotFoundError
 from app.models.quiz import Quiz as QuizModel, Question as QuestionModel
-from app.schemas.membership import MemberList
-from app.schemas.quiz import Quiz, QuizCreate, QuizUpdate, Question, QuestionCreate, QuestionDelete
+from app.schemas.quiz import (Quiz, QuizCreate, Question, QuestionCreate, QuestionDelete,
+                              DescriptionUpdate, QuestionsUpdate)
 from app.schemas.user import User
 
 
@@ -17,20 +18,19 @@ class QuizRepository:
         self.db = db
         self.current_user = current_user
 
-    async def create(self, company_id: int, payload: QuizCreate) -> Quiz:
+    async def create(self, payload: QuizCreate) -> Quiz:
         try:
-            await self._is_admin(company_id)
             query = insert(QuizModel).values(
                 quiz_name=payload.quiz_name,
-                company_id=company_id,
+                quiz_description=payload.quiz_description,
+                company_id=payload.company_id,
             ).returning(QuizModel)
             quiz: Record = await self.db.fetch_one(query=query)
-            questions = await self._create_questions(quiz_id=quiz.quiz_id, payload=payload.questions)
+            questions = await self._insert_questions(quiz_id=quiz.quiz_id, payload=payload.questions)
             return Quiz(**quiz, questions=questions)
         except UniqueViolationError:
             raise UniqueError(obj_name='Quiz')
-        except (TypeError, AttributeError) as e:
-            print(e)
+        except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Quiz')
 
     async def get(self, quiz_id: int) -> Quiz:
@@ -40,51 +40,40 @@ class QuizRepository:
             quizzes: list[Record] = await self.db.fetch_all(query=query)
             quiz = quizzes[-1]
             questions = [Question(**quiz) for quiz in quizzes]
-            await self._is_member(quiz.company_id)
             return Quiz(**quiz, questions=questions)
-        except (TypeError, AttributeError):
+        except (TypeError, AttributeError, IndexError):
             raise NotFoundError(obj_name='Quiz')
 
     async def get_company_quizzes(self, company_id: int) -> list[Quiz]:
-        await self._is_member(company_id)
         query = select(QuizModel).filter(
             QuizModel.company_id == company_id
         ).order_by(desc(QuizModel.quiz_id))
         quizzes: list[Record] = await self.db.fetch_all(query=query)
         return [Quiz(**quiz) for quiz in quizzes]
 
-    async def update(self, company_id: int, quiz_id: int, payload: QuizUpdate) -> Quiz:
+    async def update_quiz_description(self, payload: DescriptionUpdate) -> Quiz:
         try:
-            await self._is_admin(company_id)
             update_data: dict = payload.dict(exclude_unset=True, exclude_none=True)
-            query = update(QuizModel).filter(QuizModel.quiz_id == quiz_id).values(
+            query = update(QuizModel).filter(QuizModel.quiz_id == payload.quiz_id).values(
                 **update_data
             ).returning(QuizModel)
             quiz: Record = await self.db.fetch_one(query=query)
-            return Quiz(**quiz)
+            query = select(QuestionModel).filter(QuestionModel.quiz_id == payload.quiz_id)
+            questions_data: list[Record] = await self.db.fetch_all(query=query)
+            questions = [Question(**data) for data in questions_data]
+            return Quiz(**quiz, questions=questions)
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Quiz')
 
-    async def update_questions(self, company_id: int, quiz_id: int, payload: QuizUpdate) -> list[Question]:
+    async def update_quiz_questions(self, payload: QuestionsUpdate) -> Quiz:
         try:
-            await self._is_admin(company_id)
-            await self._delete_questions(quiz_id=quiz_id, payload=payload.questions)
-            return await self._create_questions(quiz_id=quiz_id, payload=payload.questions)
+            await self._delete_questions(quiz_id=payload.quiz_id, payload=payload.questions)
+            await self._insert_questions(quiz_id=payload.quiz_id, payload=payload.questions)
+            return await self.get(quiz_id=payload.quiz_id)
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Quiz')
 
-    async def delete(self, company_id: int, quiz_id: int) -> Quiz:
-        try:
-            company_members = await self._get_company_members(company_id)
-            if self.current_user.id not in company_members.admins:
-                raise NotAuthorizedError
-            query = delete(QuizModel).filter(QuizModel.quiz_id == quiz_id).returning(QuizModel)
-            quiz: Record = await self.db.fetch_one(query=query)
-            return Quiz(**quiz)
-        except (TypeError, AttributeError):
-            raise NotFoundError(obj_name='Quiz')
-
-    async def _create_questions(self, quiz_id: int, payload: list[QuestionCreate]) -> list[Question]:
+    async def _insert_questions(self, quiz_id: int, payload: list[QuestionCreate]) -> list[Question]:
         try:
             query = insert(QuestionModel).values(
                 [{**dict(p), 'quiz_id': quiz_id} for p in payload]
@@ -94,7 +83,7 @@ class QuizRepository:
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Quiz')
 
-    async def _delete_questions(self, quiz_id: int, payload: list[QuestionDelete]) -> None:
+    async def _delete_questions(self, quiz_id: int, payload: Optional[list[QuestionDelete] | list[QuestionsUpdate]]) -> None:
         try:
             question_names = [question.question_name for question in payload]
             query = delete(QuestionModel).filter(
@@ -106,28 +95,10 @@ class QuizRepository:
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Quiz')
 
-    async def _get_company_members(self, company_id: int) -> MemberList:
+    async def delete(self, quiz_id: int) -> Quiz:
         try:
-            query = select(CompanyModel).filter(CompanyModel.comp_id == company_id).options(
-                joinedload(CompanyModel.members))
-            members_data: list[Record] = await self.db.fetch_all(query=query)
-            members = [d.user_id for d in members_data]
-            admins = [d.user_id for d in members_data if d.is_admin]
-            owner = members_data[-1].owner_id
-            members.append(owner)
-            admins.append(owner)
-            return MemberList(members=members, admins=admins, owner=owner)
-        except TypeError:
-            raise NotFoundError(obj_name='Company')
-
-    async def _is_admin(self, company_id: int) -> bool:
-        company_members = await self._get_company_members(company_id)
-        if self.current_user.id not in company_members.admins:
-            raise NotAuthorizedError
-        return True
-
-    async def _is_member(self, company_id: int) -> bool:
-        company_members = await self._get_company_members(company_id)
-        if self.current_user.id not in company_members.admins:
-            raise NotAuthorizedError
-        return True
+            query = delete(QuizModel).filter(QuizModel.quiz_id == quiz_id).returning(QuizModel)
+            quiz: Record = await self.db.fetch_one(query=query)
+            return Quiz(**quiz)
+        except (TypeError, AttributeError):
+            raise NotFoundError(obj_name='Quiz')

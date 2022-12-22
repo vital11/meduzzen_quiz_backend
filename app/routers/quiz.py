@@ -1,54 +1,59 @@
 from fastapi import APIRouter, Depends
 
 from app.db.database import database
-from app.db.dependencies import get_current_user
+from app.db.dependencies import get_current_admin_user, get_current_member_user
 from app.db.repositories.quiz import QuizRepository
-from app.schemas.quiz import Quiz, QuizCreate, QuizUpdate, Question
+from app.schemas.quiz import Quiz, QuizCreate, DescriptionUpdate, QuestionsUpdate
 from app.schemas.user import User
 
 
 router = APIRouter(tags=['quizzes'])
 
 
-@router.post('/companies/{id}/quizzes/', response_model=Quiz)
+@router.post('/quizzes/', response_model=Quiz)
 async def create_quiz(
-        id: int, payload: QuizCreate, current_user: User = Depends(get_current_user)) -> Quiz:
+        payload: QuizCreate,
+        current_user: User = Depends(get_current_admin_user)
+) -> Quiz:
     quiz_repo = QuizRepository(db=database, current_user=current_user)
-    return await quiz_repo.create(company_id=id, payload=payload)
+    return await quiz_repo.create(payload=payload)
 
 
-@router.get('/companies/quizzes/{id}', response_model=Quiz)
-async def read_quiz(
-        id: int, current_user: User = Depends(get_current_user)) -> Quiz:
-    quiz_repo = QuizRepository(db=database, current_user=current_user)
-    return await quiz_repo.get(quiz_id=id)
-
-
-@router.get('/companies/{id}/quizzes', response_model=list[Quiz])
+@router.get('/quizzes/companies/{company_id}', response_model=list[Quiz])
 async def read_company_quizzes(
-        id: int, current_user: User = Depends(get_current_user)) -> list[Quiz]:
+        company_id: int, current_user: User = Depends(get_current_member_user)
+) -> list[Quiz]:
     quiz_repo = QuizRepository(db=database, current_user=current_user)
-    return await quiz_repo.get_company_quizzes(company_id=id)
+    return await quiz_repo.get_company_quizzes(company_id=company_id)
 
 
-@router.patch('/companies/{company_id}/quizzes/{quiz_id}', response_model=Quiz)
-async def update_quiz_name(
-        company_id: int, quiz_id: int, payload: QuizUpdate,
-        current_user: User = Depends(get_current_user)) -> Quiz:
-    quiz_repo = QuizRepository(db=database, current_user=current_user)
-    return await quiz_repo.update(company_id=company_id, quiz_id=quiz_id, payload=payload)
+@router.get('/quizzes/{company_id}/{quiz_id}',
+            dependencies=[Depends(get_current_member_user)],
+            response_model=Quiz)
+async def read_quiz(quiz_id: int) -> Quiz:
+    quiz_repo = QuizRepository(db=database)
+    return await quiz_repo.get(quiz_id=quiz_id)
 
 
-@router.patch('/companies/{company_id}/quizzes/{quiz_id}/questions/', response_model=list[Question])
-async def update_quiz_questions(
-        company_id: int, quiz_id: int, payload: QuizUpdate,
-        current_user: User = Depends(get_current_user)) -> list[Question]:
-    quiz_repo = QuizRepository(db=database, current_user=current_user)
-    return await quiz_repo.update_questions(company_id=company_id, quiz_id=quiz_id, payload=payload)
+@router.patch('/quizzes/',
+              dependencies=[Depends(get_current_admin_user)],
+              response_model=Quiz)
+async def update_quiz_description(payload: DescriptionUpdate) -> Quiz:
+    quiz_repo = QuizRepository(db=database)
+    return await quiz_repo.update_quiz_description(payload=payload)
 
 
-@router.delete('/companies/{company_id}/quizzes/{quiz_id}', response_model=Quiz)
-async def delete_quiz(
-        company_id: int, quiz_id: int, current_user: User = Depends(get_current_user)) -> Quiz:
-    quiz_repo = QuizRepository(db=database, current_user=current_user)
-    return await quiz_repo.delete(company_id=company_id, quiz_id=quiz_id)
+@router.patch('/quizzes/questions',
+              dependencies=[Depends(get_current_admin_user)],
+              response_model=Quiz)
+async def update_quiz_questions(payload: QuestionsUpdate) -> Quiz:
+    quiz_repo = QuizRepository(db=database)
+    return await quiz_repo.update_quiz_questions(payload=payload)
+
+
+@router.delete('/quizzes/{company_id}/{quiz_id}',
+               dependencies=[Depends(get_current_admin_user)],
+               response_model=Quiz)
+async def delete_quiz(quiz_id: int) -> Quiz:
+    quiz_repo = QuizRepository(db=database)
+    return await quiz_repo.delete(quiz_id=quiz_id)

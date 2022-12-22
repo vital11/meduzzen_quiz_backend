@@ -1,19 +1,20 @@
 from typing import Optional
 
+from asyncpg.exceptions import UniqueViolationError, ForeignKeyViolationError
 from databases import Database
 from databases.backends.postgres import Record
-from sqlalchemy import desc, insert, select, delete, update
-from asyncpg.exceptions import UniqueViolationError, ForeignKeyViolationError
+from sqlalchemy import desc, insert, select, delete, update, or_
 from sqlalchemy.orm import joinedload
 
 from app.core.exception import NotAuthorizedError, NotFoundError, UniqueError
-from app.models.user import User as UserModel
+
 from app.models.company import Company as CompanyModel
 from app.models.membership import Membership as MembershipModel, Member as MemberModel
+from app.models.user import User as UserModel
+
 from app.schemas.user import User
-from app.schemas.company import Company
 from app.schemas.membership import (Membership, MembershipTypes, MembershipCreate, MembershipParams,
-                                    Member, MemberUpdate, CompanyMember, MemberCompany)
+                                    Member, MemberUpdate, CompanyMember, MemberCompany, MemberRoles)
 
 
 class MembershipRepository:
@@ -23,16 +24,16 @@ class MembershipRepository:
 
     async def create_membership(self, payload: MembershipCreate) -> Membership:
         try:
-            member = await self._get_member(company_id=payload.company_id, user_id=payload.user_id)
-            if member:
+            is_member = await self.is_member(company_id=payload.company_id, user_id=payload.user_id)
+            if is_member:
                 raise UniqueError('Member')
-            company = await self._get_company(id=payload.company_id)
+            is_owner = await self.is_owner(company_id=payload.company_id)
             is_acceptable = (payload.membership_type == MembershipTypes.invite
-                             and self.current_user.id == company.owner_id
+                             and is_owner
                              and self.current_user.id != payload.user_id
                              or
                              payload.membership_type == MembershipTypes.request
-                             and self.current_user.id != company.owner_id
+                             and not is_owner
                              and self.current_user.id == payload.user_id)
             if not is_acceptable:
                 raise NotAuthorizedError(f'You can send an invitation to your company to any new user except yourself. '
@@ -66,14 +67,16 @@ class MembershipRepository:
             raise NotAuthorizedError
 
         # Company invites
-        if q.membership_type == MembershipTypes.invite and q.company_id:
+        if (q.membership_type == MembershipTypes.invite and q.company_id
+                and await self.is_owner(company_id=q.company_id)):
             query = select(MembershipModel).filter(
                 MembershipModel.membership_type == MembershipTypes.invite,
                 MembershipModel.company_id == q.company_id,
             ).order_by(desc(MembershipModel.membership_id))
 
         # Company requests
-        if q.membership_type == MembershipTypes.request and q.company_id:
+        if (q.membership_type == MembershipTypes.request and q.company_id
+                and await self.is_owner(company_id=q.company_id)):
             query = select(MembershipModel).filter(
                 MembershipModel.membership_type == MembershipTypes.request,
                 MembershipModel.company_id == q.company_id,
@@ -128,7 +131,7 @@ class MembershipRepository:
             query = insert(MemberModel).values(
                 user_id=payload.user_id,
                 company_id=payload.company_id,
-                is_admin=False,
+                role=MemberRoles.member,
             ).returning(MemberModel)
             member: Record = await self.db.fetch_one(query=query)
 
@@ -160,16 +163,13 @@ class MembershipRepository:
 
     async def update_member(self, payload: MemberUpdate) -> Member:
         try:
-            company = await self._get_company(id=payload.company_id)
-            if company.owner_id != self.current_user.id:
-                raise NotAuthorizedError(f'You are not the owner of the Company id={company.comp_id}')
-            if company.owner_id == payload.user_id:
-                raise NotAuthorizedError(f'You are the owner of the Company id={company.comp_id} '
+            if self.current_user.id == payload.user_id:
+                raise NotAuthorizedError(f'You are the owner of the Company ({payload.company_id}) '
                                          f'until the end of time')
             query = update(MemberModel).filter(
                 MemberModel.company_id == payload.company_id,
                 MemberModel.user_id == payload.user_id
-            ).values(is_admin=payload.is_admin).returning(MemberModel)
+            ).values(role=payload.role).returning(MemberModel)
             member: Record = await self.db.fetch_one(query=query)
             return Member(**member)
         except TypeError:
@@ -188,21 +188,37 @@ class MembershipRepository:
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Member')
 
-    async def _get_company(self, id: int) -> Company:
+    async def is_member(self, company_id: Optional[int] = None, user_id: Optional[int] = None) -> bool:
         try:
-            query = select(CompanyModel).filter(CompanyModel.comp_id == id)
-            company: Record = await self.db.fetch_one(query=query)
-            return Company(**company)
-        except TypeError:
-            raise NotFoundError(obj_name='Company')
-
-    async def _get_member(self, company_id: int, user_id: int) -> Member | None:
-        try:
+            user_id = user_id or self.current_user.id
             query = select(MemberModel).filter(
                 MemberModel.company_id == company_id,
-                MemberModel.user_id == user_id).options(
-                joinedload(MemberModel.member))
-            member: Record = await self.db.fetch_one(query=query)
-            return Member(**member)
+                MemberModel.user_id == user_id)
+            return await self.db.execute(query=query)
         except TypeError:
-            return None
+            return False
+
+    async def is_admin(self, company_id: Optional[int] = None, user_id: Optional[int] = None) -> bool:
+        try:
+            user_id = user_id or self.current_user.id
+            query = select(MemberModel).filter(
+                MemberModel.company_id == company_id,
+                MemberModel.user_id == user_id,
+                or_(
+                    MemberModel.role == MemberRoles.admin,
+                    MemberModel.role == MemberRoles.owner,
+                ))
+            return await self.db.execute(query=query)
+        except TypeError:
+            return False
+
+    async def is_owner(self, company_id: Optional[int] = None, user_id: Optional[int] = None) -> bool:
+        try:
+            user_id = user_id or self.current_user.id
+            query = select(MemberModel).filter(
+                MemberModel.company_id == company_id,
+                MemberModel.user_id == user_id,
+                MemberModel.role == MemberRoles.owner)
+            return await self.db.execute(query=query)
+        except (TypeError, AttributeError):
+            return False
