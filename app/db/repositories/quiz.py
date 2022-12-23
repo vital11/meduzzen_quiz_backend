@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 from asyncpg import UniqueViolationError
 from databases import Database
@@ -8,8 +8,7 @@ from sqlalchemy.orm import joinedload
 
 from app.core.exception import UniqueError, NotFoundError
 from app.models.quiz import Quiz as QuizModel, Question as QuestionModel
-from app.schemas.quiz import (Quiz, QuizCreate, Question, QuestionCreate, QuestionDelete,
-                              DescriptionUpdate, QuestionsUpdate)
+from app.schemas.quiz import Quiz, QuizCreate, QuizUpdate, QuizDescription, Question, QuestionBase
 from app.schemas.user import User
 
 
@@ -51,7 +50,7 @@ class QuizRepository:
         quizzes: list[Record] = await self.db.fetch_all(query=query)
         return [Quiz(**quiz) for quiz in quizzes]
 
-    async def update_quiz_description(self, payload: DescriptionUpdate) -> Quiz:
+    async def update_quiz_description(self, payload: QuizDescription) -> Quiz:
         try:
             update_data: dict = payload.dict(exclude_unset=True, exclude_none=True)
             query = update(QuizModel).filter(QuizModel.quiz_id == payload.quiz_id).values(
@@ -65,15 +64,16 @@ class QuizRepository:
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Quiz')
 
-    async def update_quiz_questions(self, payload: QuestionsUpdate) -> Quiz:
+    async def update_quiz(self, payload: QuizUpdate) -> Quiz:
         try:
-            await self._delete_questions(quiz_id=payload.quiz_id, payload=payload.questions)
+            query = delete(QuestionModel).filter(QuestionModel.quiz_id == payload.quiz_id)
+            await self.db.execute(query=query)
             await self._insert_questions(quiz_id=payload.quiz_id, payload=payload.questions)
             return await self.get(quiz_id=payload.quiz_id)
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Quiz')
 
-    async def _insert_questions(self, quiz_id: int, payload: list[QuestionCreate]) -> list[Question]:
+    async def _insert_questions(self, quiz_id: int, payload: list[QuestionBase]) -> list[Question]:
         try:
             query = insert(QuestionModel).values(
                 [{**dict(p), 'quiz_id': quiz_id} for p in payload]
@@ -83,7 +83,7 @@ class QuizRepository:
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Quiz')
 
-    async def _delete_questions(self, quiz_id: int, payload: Optional[list[QuestionDelete] | list[QuestionsUpdate]]) -> None:
+    async def _delete_questions(self, quiz_id: int, payload: list[QuestionBase]) -> None:
         try:
             question_names = [question.question_name for question in payload]
             query = delete(QuestionModel).filter(

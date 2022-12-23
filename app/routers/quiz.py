@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.db.database import database
 from app.db.dependencies import get_current_admin_user, get_current_member_user
 from app.db.repositories.quiz import QuizRepository
-from app.schemas.quiz import Quiz, QuizCreate, DescriptionUpdate, QuestionsUpdate
+from app.schemas.quiz import Quiz, QuizCreate, QuizUpdate, QuizDescription
 from app.schemas.user import User
 
 
@@ -38,7 +38,7 @@ async def read_quiz(quiz_id: int) -> Quiz:
 @router.patch('/quizzes/',
               dependencies=[Depends(get_current_admin_user)],
               response_model=Quiz)
-async def update_quiz_description(payload: DescriptionUpdate) -> Quiz:
+async def update_quiz_description(payload: QuizDescription) -> Quiz:
     quiz_repo = QuizRepository(db=database)
     return await quiz_repo.update_quiz_description(payload=payload)
 
@@ -46,9 +46,9 @@ async def update_quiz_description(payload: DescriptionUpdate) -> Quiz:
 @router.patch('/quizzes/questions',
               dependencies=[Depends(get_current_admin_user)],
               response_model=Quiz)
-async def update_quiz_questions(payload: QuestionsUpdate) -> Quiz:
+async def update_quiz(payload: QuizUpdate) -> Quiz:
     quiz_repo = QuizRepository(db=database)
-    return await quiz_repo.update_quiz_questions(payload=payload)
+    return await quiz_repo.update_quiz(payload=payload)
 
 
 @router.delete('/quizzes/{company_id}/{quiz_id}',

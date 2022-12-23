@@ -1,5 +1,3 @@
-from typing import Any
-
 from fastapi import Depends, Response, HTTPException, status
 from fastapi.security import HTTPBearer
 from datetime import datetime
@@ -7,6 +5,7 @@ from jwt import decode
 from jose import jwt, JWTError
 
 from app.core.exception import NotAuthorizedError
+from app.core.utils import common_params
 from app.db.database import database
 from app.db.repositories.membership import MembershipRepository
 from app.db.repositories.user import UserRepository
@@ -72,20 +71,6 @@ def get_current_active_superuser(current_user: User = Depends(get_current_active
             status_code=400, detail="The user doesn't have enough privileges"
         )
     return current_user
-
-
-async def common_params(
-        q: str | None = None,
-        user_id: int | None = None,
-        id: int | None = None,
-        comp_id: int | None = None,
-        company_id: int | None = None,
-        payload: dict | None = None) -> IsMemberCommons:
-    try:
-        company_id = id or company_id or comp_id or payload.get('comp_id') or payload.get('company_id')
-    except (TypeError, AttributeError):
-        pass
-    return IsMemberCommons(q=q, user_id=user_id, company_id=company_id)
 
 
 async def get_current_member_user(
