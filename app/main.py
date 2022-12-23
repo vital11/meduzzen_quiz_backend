@@ -5,7 +5,7 @@ from loguru import logger
 
 from app.core import settings
 from app.db.database import database
-from app.routers import check_health, user, login, company, membership
+from app.routers import check_health, user, login, company, membership, quiz
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -39,6 +39,7 @@ app.include_router(login.router)
 app.include_router(user.router)
 app.include_router(company.router)
 app.include_router(membership.router)
+app.include_router(quiz.router)
 
 
 if __name__ == '__main__':

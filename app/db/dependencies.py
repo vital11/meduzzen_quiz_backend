@@ -4,9 +4,12 @@ from datetime import datetime
 from jwt import decode
 from jose import jwt, JWTError
 
-
+from app.core.exception import NotAuthorizedError
+from app.core.utils import common_params
 from app.db.database import database
+from app.db.repositories.membership import MembershipRepository
 from app.db.repositories.user import UserRepository
+from app.schemas.membership import IsMemberCommons
 from app.schemas.token import TokenData
 from app.schemas.user import User, UserCreate
 from app.core.verification import VerifyToken
@@ -62,9 +65,36 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     return current_user
 
 
-def get_current_active_superuser(current_user: User = Depends(get_current_user)) -> User:
+def get_current_active_superuser(current_user: User = Depends(get_current_active_user)) -> User:
     if not current_user.is_superuser:
         raise HTTPException(
             status_code=400, detail="The user doesn't have enough privileges"
         )
+    return current_user
+
+
+async def get_current_member_user(
+        current_user: User = Depends(get_current_user),
+        commons: IsMemberCommons = Depends(common_params)) -> User:
+    member_repo = MembershipRepository(db=database, current_user=current_user)
+    if not await member_repo.is_member(company_id=commons.company_id, user_id=current_user.id):
+        raise NotAuthorizedError(f'You are not the member of the Company')
+    return current_user
+
+
+async def get_current_admin_user(
+        current_user: User = Depends(get_current_user),
+        commons: IsMemberCommons = Depends(common_params)) -> User:
+    member_repo = MembershipRepository(db=database, current_user=current_user)
+    if not await member_repo.is_admin(company_id=commons.company_id, user_id=current_user.id):
+        raise NotAuthorizedError(f'You are not the admin of the Company')
+    return current_user
+
+
+async def get_current_owner_user(
+        current_user: User = Depends(get_current_user),
+        commons: IsMemberCommons = Depends(common_params)) -> User:
+    member_repo = MembershipRepository(db=database, current_user=current_user)
+    if not await member_repo.is_owner(company_id=commons.company_id, user_id=current_user.id):
+        raise NotAuthorizedError(f'You are not the owner of the Company')
     return current_user

@@ -1,15 +1,14 @@
 from typing import Optional
-
 from asyncpg import UniqueViolationError
 from databases import Database
 from databases.backends.postgres import Record
 from sqlalchemy import desc, insert, select, delete, update
-from sqlalchemy.orm import joinedload
 
 from app.core.exception import UniqueError, NotFoundError, NotAuthorizedError
-from app.models.user import User as UserModel
 from app.models.company import Company as CompanyModel
+from app.models.membership import Member as MemberModel
 from app.schemas.company import Company, CompanyCreate, CompanyUpdate
+from app.schemas.membership import MemberRoles
 from app.schemas.user import User
 
 
@@ -19,24 +18,32 @@ class CompanyRepository:
         self.current_user = current_user
 
     async def create(self, payload: CompanyCreate) -> Company:
-        query = insert(CompanyModel).values(
-            comp_name=payload.comp_name,
-            comp_description=payload.comp_description,
-            is_private=payload.is_private,
-            owner_id=self.current_user.id,
-        ).returning(CompanyModel)
         try:
+            query = insert(CompanyModel).values(
+                comp_name=payload.comp_name,
+                comp_description=payload.comp_description,
+                is_private=payload.is_private,
+                owner_id=self.current_user.id,
+            ).returning(CompanyModel)
             company: Record = await self.db.fetch_one(query=query)
+            query = insert(MemberModel).values(
+                user_id=self.current_user.id,
+                company_id=company.comp_id,
+                role=MemberRoles.owner,
+            )
+            await self.db.execute(query=query)
             return Company(**company)
         except UniqueViolationError:
             raise UniqueError(obj_name='Company')
 
     async def get(self, id: int) -> Company:
         try:
-            company = await self._get_company(id=id)
-            if company.is_private and company.owner_id != self.current_user.id:
+            query = select(CompanyModel).filter(CompanyModel.comp_id == id)
+            company: Record = await self.db.fetch_one(query=query)
+            is_member = await self.is_member(company_id=id)
+            if company.is_private and not is_member:
                 raise NotAuthorizedError(f'Company with id={id} is private')
-            return company
+            return Company(**company)
         except TypeError:
             raise NotFoundError(obj_name='Company')
 
@@ -56,10 +63,6 @@ class CompanyRepository:
     async def update(self, id: int, payload: CompanyUpdate) -> Company:
         try:
             update_data: dict = payload.dict(exclude_unset=True, exclude_none=True)
-            query = select(CompanyModel).filter(CompanyModel.comp_id == id)
-            company: Record = await self.db.fetch_one(query=query)
-            if company.owner_id != self.current_user.id:
-                raise NotAuthorizedError(f'You are not the owner of the Company id={id}')
             query = update(CompanyModel).filter(
                 CompanyModel.comp_id == id).values(**update_data).returning(CompanyModel)
             company: Record = await self.db.fetch_one(query=query)
@@ -69,20 +72,18 @@ class CompanyRepository:
 
     async def delete(self, id: int) -> Company:
         try:
-            query = select(CompanyModel).filter(CompanyModel.comp_id == id)
-            company: Record = await self.db.fetch_one(query=query)
-            if company.owner_id != self.current_user.id:
-                raise NotAuthorizedError(f'You are not the owner of the Company id={id}')
             query = delete(CompanyModel).filter(CompanyModel.comp_id == id).returning(CompanyModel)
             company: Record = await self.db.fetch_one(query=query)
             return Company(**company)
         except (TypeError, AttributeError):
             raise NotFoundError(obj_name='Company')
 
-    async def _get_company(self, id: int) -> Company:
+    async def is_member(self, company_id: Optional[int] = None, user_id: Optional[int] = None) -> bool:
         try:
-            query = select(CompanyModel).filter(CompanyModel.comp_id == id)
-            company: Record = await self.db.fetch_one(query=query)
-            return Company(**company)
+            user_id = user_id or self.current_user.id
+            query = select(MemberModel).filter(
+                MemberModel.company_id == company_id,
+                MemberModel.user_id == user_id)
+            return await self.db.execute(query=query)
         except TypeError:
-            raise NotFoundError(obj_name='Company')
+            return False

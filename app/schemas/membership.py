@@ -8,6 +8,12 @@ class MembershipTypes(enum.Enum):
     request = 'request'
 
 
+class MemberRoles(enum.Enum):
+    member = 'member'
+    admin = 'admin'
+    owner = 'owner'
+
+
 # Shared properties
 class MembershipBase(BaseModel):
     user_id: Optional[int] = None
@@ -45,14 +51,14 @@ class MembershipParams(Membership):
 class MemberBase(BaseModel):
     user_id: Optional[int] = None
     company_id: Optional[int] = None
-    is_admin: bool = False
+    role: MemberRoles = MemberRoles.member
 
 
 # Properties to receive via API on update
 class MemberUpdate(MemberBase):
     user_id: int
     company_id: int
-    is_admin: bool
+    role: MemberRoles
 
 
 class MemberInDBBase(MemberBase):
@@ -73,3 +79,9 @@ class CompanyMember(MemberInDBBase):
 
 class MemberCompany(MemberInDBBase):
     comp_name: Optional[str]
+
+
+class IsMemberCommons(BaseModel):
+    company_id: Optional[int]
+    user_id: Optional[int]
+    q: Optional[str]

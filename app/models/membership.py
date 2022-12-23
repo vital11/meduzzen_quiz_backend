@@ -1,8 +1,8 @@
-from sqlalchemy import Column, Integer, Boolean, ForeignKey, UniqueConstraint, Enum
+from sqlalchemy import Column, Integer, ForeignKey, UniqueConstraint, Enum
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
-from app.schemas.membership import MembershipTypes
+from app.schemas.membership import MembershipTypes, MemberRoles
 
 
 class Membership(Base):
@@ -26,7 +26,7 @@ class Member(Base):
     __tablename__ = 'members'
 
     m_id = Column(Integer, primary_key=True, index=True)
-    is_admin = Column(Boolean, default=False)
+    role = Column(Enum(MemberRoles), default=False)
 
     company_id = Column(Integer, ForeignKey('companies.comp_id', ondelete='CASCADE', onupdate='CASCADE'))
     company = relationship('Company', back_populates='members')
@@ -35,5 +35,5 @@ class Member(Base):
     member = relationship('User', back_populates="member_companies")
 
     __table_args__ = (
-        UniqueConstraint('user_id', 'company_id', 'is_admin', name='unique_member'),
+        UniqueConstraint('user_id', 'company_id', name='uniq_member'),
     )

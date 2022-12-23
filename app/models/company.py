@@ -18,3 +18,5 @@ class Company(Base):
     memberships = relationship('Membership', back_populates='company', cascade='all, delete')
 
     members = relationship('Member', back_populates='company', cascade='all, delete')
+
+    quizzes = relationship('Quiz', back_populates='company', cascade='all, delete')
